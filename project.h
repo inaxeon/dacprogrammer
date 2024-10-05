@@ -27,6 +27,7 @@
 #define CONFIG_MAGIC        0x4646
 
 #define _I2C_XFER_
+#define _I2C_XFER_BYTE_
 #define _I2C_XFER_X16_
 
 #define UART_BAUD            9600

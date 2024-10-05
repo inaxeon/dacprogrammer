@@ -265,10 +265,10 @@ static bool do_interactive(sys_config_t *config, const char *arg)
     } while (c != SEQ_ESCAPE_CHAR);
     
     if (reg == MCP47FEBXX_VOLATILE_DAC0)
-        i2c_write16(config->i2c_addr, reg | MCP47FEBXX_NONVOLATILE_DAC0, value);
+        i2c_write16(config->i2c_addr, MCP47FEBXX_NONVOLATILE_DAC0 | MCP47FEBXX_CMD_WRITE, value);
 
     if (reg == MCP47FEBXX_VOLATILE_DAC1)
-        i2c_write16(config->i2c_addr, reg | MCP47FEBXX_NONVOLATILE_DAC1, value);
+        i2c_write16(config->i2c_addr, MCP47FEBXX_NONVOLATILE_DAC1 | MCP47FEBXX_CMD_WRITE, value);
     
     return true;
 }
@@ -281,10 +281,39 @@ static bool do_dac_write16(sys_config_t *config, uint8_t reg, uint16_t value)
 static bool do_dac_set_slave_addr(sys_config_t *config, uint8_t addr)
 {
     uint16_t new_reg_value = addr;
+    
+    PORTAbits.RA3 = 1; // HV ON
+    
+    __delay_ms(1);
 
-    if (!i2c_write16(config->i2c_addr, MCP47FEBXX_GAINCTRL_SLAVEADDR, new_reg_value))
+    if (!i2c_write_byte(config->i2c_addr, MCP47FEBXX_GAINCTRL_SLAVEADDR | MCP47FEBXX_CMD_DISABLE_CFG_BIT))
         return false;
+    
+    __delay_ms(1);
+    
+    PORTAbits.RA3 = 0; // HV OFF
+    
+    __delay_ms(100);
 
+    if (!i2c_write16(config->i2c_addr, MCP47FEBXX_GAINCTRL_SLAVEADDR | MCP47FEBXX_CMD_WRITE, new_reg_value))
+        return false;    
+    
+    config->i2c_addr = addr;
+    
+    __delay_ms(100);
+    
+    PORTAbits.RA3 = 1; // HV ON
+    
+    __delay_ms(1);
+
+    if (!i2c_write(config->i2c_addr, MCP47FEBXX_GAINCTRL_SLAVEADDR | MCP47FEBXX_CMD_ENABLE_CFG_BIT,
+            MCP47FEBXX_GAINCTRL_SLAVEADDR | MCP47FEBXX_CMD_ENABLE_CFG_BIT))
+        return false;
+    
+    __delay_ms(1);
+    
+    PORTAbits.RA3 = 0; // HV OFF
+    
     return true;
 }
 
@@ -294,6 +323,7 @@ static bool do_dump(sys_config_t *config)
     uint16_t dac1;
     uint16_t dac0_nv;
     uint16_t dac1_nv;
+    uint16_t sladdr;
 
     if (!i2c_read16(config->i2c_addr, MCP47FEBXX_VOLATILE_DAC0 | MCP47FEBXX_CMD_READ, &dac0))
         return false;
@@ -306,14 +336,18 @@ static bool do_dump(sys_config_t *config)
 
     if (!i2c_read16(config->i2c_addr, MCP47FEBXX_NONVOLATILE_DAC1 | MCP47FEBXX_CMD_READ, &dac1_nv))
         return false;
+    
+    if (!i2c_read16(config->i2c_addr, MCP47FEBXX_GAINCTRL_SLAVEADDR | MCP47FEBXX_CMD_READ, &sladdr))
+        return false;
 
     printf(
             "\r\nCurrent registers:\r\n\r\n"
-            "\tV  DAC0 (offset) ...: %d\r\n"
-            "\tNV DAC0 (offset) ...: %d\r\n"
-            "\tV  DAC1 (gain) .....: %d\r\n"
-            "\tNV DAC1 (gain) .....: %d\r\n"
-          , dac0, dac0_nv, dac1, dac1_nv
+            "\tV  DAC0 (offset) ......: %d\r\n"
+            "\tNV DAC0 (offset) ......: %d\r\n"
+            "\tV  DAC1 (gain) ........: %d\r\n"
+            "\tNV DAC1 (gain) ........: %d\r\n"
+            "\tGainctrl / Slave reg ..: %x\r\n"
+          , dac0, dac0_nv, dac1, dac1_nv, sladdr
         );
 
     printf("\r\n");
