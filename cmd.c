@@ -256,9 +256,19 @@ static bool do_interactive(sys_config_t *config, const char *arg)
         c = wdt_getch();
         
         if (c == '+')
-            value++;
+        {
+            if (reg == MCP47FEBXX_VOLATILE_DAC0)
+                value--;
+            else
+                value++;
+        }
         if (c == '-')
-            value--;
+        {
+            if (reg == MCP47FEBXX_VOLATILE_DAC0)
+                value++;
+            else
+                value--;
+        }
         
         i2c_write16(config->i2c_addr, reg | MCP47FEBXX_CMD_WRITE, value);
         
@@ -269,6 +279,8 @@ static bool do_interactive(sys_config_t *config, const char *arg)
 
     if (reg == MCP47FEBXX_VOLATILE_DAC1)
         i2c_write16(config->i2c_addr, MCP47FEBXX_NONVOLATILE_DAC1 | MCP47FEBXX_CMD_WRITE, value);
+    
+    printf("New value %d has been saved to the nonvolatile register\r\n", value);
     
     return true;
 }
